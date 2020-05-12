@@ -1,11 +1,18 @@
+import logging
 import os
 import uuid
+from typing import Dict
 
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultCachedPhoto
 from telegram.ext import Updater, InlineQueryHandler, CallbackQueryHandler
+
 from game import Game
-from typing import Dict
+
+logging.basicConfig(handlers=[logging.FileHandler('log.txt', 'w', 'utf-8')],
+                    level=logging.INFO,
+                    format='[*] {%(pathname)s:%(lineno)d} %(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -39,6 +46,7 @@ keyboard_markup = InlineKeyboardMarkup(list(split([
 
 def error(update, context):
     print(f'Update "{update}" caused error "{context.error}"')
+    logger.warning('Update "%s" caused error "%s"', update, context.error)
 
 
 def button(update, context):
@@ -72,6 +80,7 @@ def main():
 
     dp.add_handler(InlineQueryHandler(inline_handler))
     dp.add_handler(CallbackQueryHandler(button))
+
     dp.add_error_handler(error)
 
     print('Starting polling')

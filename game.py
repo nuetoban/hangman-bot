@@ -4,7 +4,7 @@ import re
 class Game:
     def __init__(self, word: str):
         self.word = word
-        self.mask = [False for _ in range(len(word))]
+        self.mask = [False] * len(word)
 
         # х у й  -  self.word
         # 0 0 1  -  self.mask
@@ -13,11 +13,7 @@ class Game:
     def apply_mask(self):
         out = []
 
-        for c, m in zip(self.word, self.mask):
-            if m:
-                out.append(c)
-            else:
-                out.append('_')
+        [out.append(c) if m else out.append('_') for c, m in zip(self.word, self.mask)]
 
         return ' '.join(out)
 
