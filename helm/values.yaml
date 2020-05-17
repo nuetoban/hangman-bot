@@ -1,0 +1,6 @@
+---
+image: nuetoban/hangman-bot
+tag: "latest"
+
+botToken: ""
+

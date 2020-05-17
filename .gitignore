@@ -3,4 +3,6 @@ venv
 .env
 .idea
 .virtualenv/
+.mypy_cache
 log.txt
+helm/values-prod.yaml

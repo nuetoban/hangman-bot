@@ -4,6 +4,7 @@ import uuid
 from random import choice
 from typing import List, Dict
 
+import redis
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InlineQueryResultCachedPhoto
 from telegram.ext import Updater, InlineQueryHandler, CallbackQueryHandler
@@ -19,6 +20,8 @@ load_dotenv()
 
 games: Dict[str, Game] = {}
 dictionary: List[str] = []
+
+r = redis.Redis(host='redis', port=6379, db=0)
 
 hang_pictures = [
     'AgACAgIAAxkBAAEEoVZevs07VE3PdcU1LaLk3j6papPXjAACbqwxG7ha-Unvnd3ZHfwLlJ8zepEuAAMBAAMCAANtAAOGUwMAARkE',  # 1
@@ -64,7 +67,11 @@ def button(update, context):
         new_game(update, context)
 
     try:
-        game = games[query.inline_message_id]
+        game_from_redis = r.get(f'game/{query.inline_message_id}')
+        if game_from_redis is None:
+            return
+
+        game = Game.from_json(game_from_redis)
 
         if query.from_user.id != game.player_id:
             return
@@ -77,36 +84,48 @@ def button(update, context):
 
                 if game.no_letters_left():
                     context.bot.edit_message_text(
-                        'Вы выиграли!',
+                        f'Вы выиграли!\n\nЗагаданное слово: {game.word}',
                         inline_message_id=query.inline_message_id,
                         reply_markup=InlineKeyboardMarkup(
                             [[InlineKeyboardButton('Начать новую игру!', callback_data='new_game')]])
                     )
 
+                    r.delete(f'game/{query.inline_message_id}')
+
                 else:
                     context.bot.edit_message_text(
-                        game.apply_mask(),
+                        # f'{game.apply_mask()}\n\nОшибки: {", ".join(game.errors())}',
+                        f'{game.apply_mask()}\n\nОшибки: {game.errors_str()}',
                         inline_message_id=query.inline_message_id,
                         reply_markup=KeyboardMarkup(game.guessed_letters).get_markup(),
                     )
+
+                    r.set(f'game/{query.inline_message_id}', game.to_json(), ex=3600)
 
             else:
                 stage = game.next_stage()
 
                 if game.last_stage_reached():
                     context.bot.edit_message_text(
-                        f'Вы проиграли!\nЗагаданное слово: {game.word}',
+                        f'Вы проиграли!\n\nЗагаданное слово: {game.word}',
                         inline_message_id=query.inline_message_id,
                         reply_markup=InlineKeyboardMarkup(
                             [[InlineKeyboardButton('Начать новую игру!', callback_data='new_game')]])
                     )
 
+                    r.delete(f'game/{query.inline_message_id}')
+
                 else:
                     context.bot.edit_message_media(
                         inline_message_id=query.inline_message_id,
-                        media=InputMediaPhoto(hang_pictures[stage], caption=game.apply_mask()),
-                        reply_markup=KeyboardMarkup(game.guessed_letters).get_markup(),
+                        media=InputMediaPhoto(
+                            hang_pictures[stage],
+                            # caption=f'{game.apply_mask()}\n\nОшибки: {", ".join(game.errors())}'),
+                            caption=f'{game.apply_mask()}\n\nОшибки: {game.errors_str()}'),
+                    reply_markup=KeyboardMarkup(game.guessed_letters).get_markup(),
                     )
+
+                    r.set(f'game/{query.inline_message_id}', game.to_json(), ex=3600)
 
     except TypeError:
         pass
@@ -140,7 +159,7 @@ def new_game(update, context):
         reply_markup=KeyboardMarkup().get_markup(),
     )
 
-    games[query.inline_message_id] = game
+    r.set(f'game/{query.inline_message_id}', game.to_json(), ex=3600)
 
 
 def main():

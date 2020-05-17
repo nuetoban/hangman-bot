@@ -1,4 +1,6 @@
+import json
 import re
+from random import choice
 
 
 class Game:
@@ -8,6 +10,10 @@ class Game:
         self.mask = [False] * len(word)
         self.stage = 0  # If we reach 11 stage then the game is over
         self.guessed_letters = []
+        self.errors = []
+
+        # Open 1 letter
+        self.try_letter(choice(self.word))
 
         # х у й  -  self.word
         # 0 0 1  -  self.mask
@@ -27,7 +33,13 @@ class Game:
 
         self.guessed_letters.append(ord(letter))
 
+        if len(positions) == 0:
+            self.errors.append(letter)
+
         return len(positions) > 0
+
+    def errors_str(self) -> str:
+        return ', '.join(self.errors)
 
     def no_letters_left(self) -> bool:
         return all(self.mask)
@@ -38,3 +50,18 @@ class Game:
 
     def last_stage_reached(self) -> bool:
         return self.stage >= 11
+
+    def to_json(self) -> str:
+        return json.dumps(self.__dict__)
+
+    @classmethod
+    def from_json(cls, document: str):
+        d = json.loads(document)
+
+        new_game = cls(d['word'], d['player_id'])
+        new_game.mask = d['mask']
+        new_game.stage = d['stage']
+        new_game.guessed_letters = d['guessed_letters']
+        new_game.errors = d['errors']
+
+        return new_game

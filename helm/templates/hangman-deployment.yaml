@@ -1,0 +1,49 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose-prod.yml -o kubernetes -c
+    kompose.version: 1.19.0 ()
+  creationTimestamp: null
+  labels:
+    io.kompose.service: hangman
+  name: hangman
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      name: hangman
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose-prod.yml -o kubernetes -c
+        kompose.version: 1.19.0 ()
+      creationTimestamp: null
+      labels:
+        io.kompose.service: hangman
+        name: hangman
+    spec:
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - env:
+        - name: BOT_TOKEN
+          value: {{ .Values.botToken }}
+        image: {{.Values.image}}:{{.Values.tag}}
+        name: hangman
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        imagePullPolicy: Always
+      restartPolicy: Always
+status: {}
