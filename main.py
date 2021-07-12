@@ -8,6 +8,7 @@ import redis
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InlineQueryResultCachedPhoto
 from telegram.ext import Updater, InlineQueryHandler, CallbackQueryHandler
+from telegram.error import BadRequest
 
 from game import Game
 
@@ -21,22 +22,43 @@ load_dotenv()
 games: Dict[str, Game] = {}
 dictionary: List[str] = []
 
-r = redis.Redis(host='redis', port=6379, db=0)
+r = redis.Redis(
+    host=os.getenv('BOT_REDIS_HOST'),
+    port=os.getenv('BOT_REDIS_PORT') if os.getenv('BOT_REDIS_PORT') else 6379,
+    db=os.getenv('BOT_REDIS_DB') if os.getenv('BOT_REDIS_DB') else 0,
+)
 
-hang_pictures = [
-    'AgACAgIAAxkBAAEEoVZevs07VE3PdcU1LaLk3j6papPXjAACbqwxG7ha-Unvnd3ZHfwLlJ8zepEuAAMBAAMCAANtAAOGUwMAARkE',  # 1
-    'AgACAgIAAxkBAAEEoVhevs1YbJBHv4tnN8IVwGfRJkihAQACb6wxG7ha-UmM7TRdUkNGYOcc65EuAAMBAAMCAANtAAN99wEAARkE',  # 2
-    'AgACAgIAAxkBAAEEoV1evs1wwLSU8briYQQTXCDEpnBRJAACcKwxG7ha-UmWlCXotFm7zJCmgJIuAAMBAAMCAANtAAOCbgEAARkE',  # 3
-    'AgACAgIAAxkBAAEEoV9evs17Wy2QPqlTGciAqv2xhDsy3wACcawxG7ha-UkG0WoITztYFh9kyw4ABAEAAwIAA20AA3qkBQABGQQ',  # 4
-    'AgACAgIAAxkBAAEEoWZevs2aqpXy7DYLcSFJyvsVKfm8LQACcqwxG7ha-Ul_ZLG4DUwN3e__bZEuAAMBAAMCAANtAAP3UgMAARkE',  # 5
-    'AgACAgIAAxkBAAEEoWhevs2one8-n1jj1vDlOrD2boLT3wACc6wxG7ha-Uk-NAQYCznbpW0dwQ4ABAEAAwIAA20AA7UfBgABGQQ',  # 6
-    'AgACAgIAAxkBAAEEoWxevs21CTjvHdUFbRvaojKW5CWiJAACdKwxG7ha-Uk6GeJiiIt8w7oPwQ4ABAEAAwIAA20AA7YaBgABGQQ',  # 7
-    'AgACAgIAAxkBAAEEoW5evs3BoJt-JblSDzw5m-kpvdMY-QACdawxG7ha-Uns4MyCq4khz2vGwg8ABAEAAwIAA20AA88IBwABGQQ',  # 8
-    'AgACAgIAAxkBAAEEoXJevs3TYPp3JLQPlkBTMNbNvB6i6gACdqwxG7ha-UldpbLG1h2hhMEQwQ4ABAEAAwIAA20AA_QcBgABGQQ',  # 9
-    'AgACAgIAAxkBAAEEoXRevs3l0hJBBXDsBrL3ZIM_PJoQZAACd6wxG7ha-UkDBWsMxR57pmPzwA4ABAEAAwIAA20AA4IYBgABGQQ',  # 10
-    'AgACAgIAAxkBAAEEoXpevs30IhqHYxneedDC74qqb_M1RgACeKwxG7ha-UkNqNvQh0cb0Vnv6ZIuAAMBAAMCAANtAAM5bAEAARkE',  # 11
-]
+hang_pictures = {
+    0: '',
+    1: '',
+    2: '',
+    3: '',
+    4: '',
+    5: '',
+    6: '',
+    7: '',
+    8: '',
+    9: '',
+    10: '',
+}
 
+__hang_pictures_fs = {
+    0: None,
+    1: None,
+    2: None,
+    3: None,
+    4: None,
+    5: None,
+    6: None,
+    7: None,
+    8: None,
+    9: None,
+    10: None,
+}
+
+def __upload_pic(stage: int, bot):
+    result = bot.send_photo(os.getenv('BOT_SVC_CHAT'), photo=open(__hang_pictures_fs[stage], 'rb'))
+    hang_pictures[stage] = result.photo[-1].file_id
 
 def split(a, n):
     k, m = divmod(len(a), n)
@@ -94,7 +116,6 @@ def button(update, context):
 
                 else:
                     context.bot.edit_message_text(
-                        # f'{game.apply_mask()}\n\nОшибки: {", ".join(game.errors())}',
                         f'{game.apply_mask()}\n\nОшибки: {game.errors_str()}',
                         inline_message_id=query.inline_message_id,
                         reply_markup=KeyboardMarkup(game.guessed_letters).get_markup(),
@@ -116,14 +137,23 @@ def button(update, context):
                     r.delete(f'game/{query.inline_message_id}')
 
                 else:
-                    context.bot.edit_message_media(
-                        inline_message_id=query.inline_message_id,
-                        media=InputMediaPhoto(
-                            hang_pictures[stage],
-                            # caption=f'{game.apply_mask()}\n\nОшибки: {", ".join(game.errors())}'),
-                            caption=f'{game.apply_mask()}\n\nОшибки: {game.errors_str()}'),
-                    reply_markup=KeyboardMarkup(game.guessed_letters).get_markup(),
-                    )
+                    try:
+                        context.bot.edit_message_media(
+                            inline_message_id=query.inline_message_id,
+                            media=InputMediaPhoto(
+                                hang_pictures[stage],
+                                caption=f'{game.apply_mask()}\n\nОшибки: {game.errors_str()}'),
+                        reply_markup=KeyboardMarkup(game.guessed_letters).get_markup(),
+                        )
+                    except BadRequest as e:
+                        __upload_pic(stage, context.bot)
+                        context.bot.edit_message_media(
+                            inline_message_id=query.inline_message_id,
+                            media=InputMediaPhoto(
+                                hang_pictures[stage],
+                                caption=f'{game.apply_mask()}\n\nОшибки: {game.errors_str()}'),
+                        reply_markup=KeyboardMarkup(game.guessed_letters).get_markup(),
+                        )
 
                     r.set(f'game/{query.inline_message_id}', game.to_json(), ex=3600)
 
@@ -132,17 +162,23 @@ def button(update, context):
 
 
 def inline_handler(update, context):
+    stage = 10
+
     results = [
         InlineQueryResultCachedPhoto(
             id=uuid.uuid4(),
-            photo_file_id='AgACAgIAAxkBAAEEoZZevtW-Ec3CiuCQN-q7-ZKt9mQ5mwACf6wxG7ha-UnsMiYogr0G1zAcuZIuAAMBAAMCAAN4AAM4EAIAARkE',
+            photo_file_id=hang_pictures[stage],
             caption='Нажми кнопку чтобы начать новую игру ⬇️',
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton('Начать игру!', callback_data='new_game')]])
         )
     ]
 
-    res = update.inline_query.answer(results, cache_time=1, is_personal=True)
+    try:
+        res = update.inline_query.answer(results, cache_time=1, is_personal=True)
+    except BadRequest as e:
+        __upload_pic(stage, context.bot)
+        res = update.inline_query.answer(results, cache_time=1, is_personal=True)
 
     print(f'inline_handler answer result: {res}')
 
@@ -153,16 +189,30 @@ def new_game(update, context):
 
     print(f'New word: {game.word}')
 
-    context.bot.edit_message_media(
-        inline_message_id=query.inline_message_id,
-        media=InputMediaPhoto(hang_pictures[0], caption=game.apply_mask()),
-        reply_markup=KeyboardMarkup().get_markup(),
-    )
+    try:
+        context.bot.edit_message_media(
+            inline_message_id=query.inline_message_id,
+            media=InputMediaPhoto(hang_pictures[0], caption=game.apply_mask()),
+            reply_markup=KeyboardMarkup().get_markup(),
+        )
+    except BadRequest as e:
+        __upload_pic(0, context.bot)
+        context.bot.edit_message_media(
+            inline_message_id=query.inline_message_id,
+            media=InputMediaPhoto(hang_pictures[0], caption=game.apply_mask()),
+            reply_markup=KeyboardMarkup().get_markup(),
+        )
+    except Exception as e:
+        print(e)
 
     r.set(f'game/{query.inline_message_id}', game.to_json(), ex=3600)
 
 
 def main():
+    if not os.getenv('BOT_SVC_CHAT'):
+        print('Please provide service chat id (for uploading photos) via BOT_SVC_CHAT env variable')
+        return 1
+
     bot_token = os.getenv('BOT_TOKEN')
     updater = Updater(bot_token, use_context=True)
 
@@ -178,8 +228,15 @@ def main():
     with open('dict.txt', 'r') as f:
         dictionary = [w.strip() for w in f.readlines()]
 
+    print('Fill assets dict')
+    key = lambda i: int(i.split('.')[0])
+    assets = sorted(os.listdir('assets'), key=key)
+    for asset in assets:
+        k = key(asset) - 1
+        __hang_pictures_fs[k] = 'assets/' + asset
+
     print('Starting polling')
-    updater.start_polling(clean=True)
+    updater.start_polling(drop_pending_updates=True)
     updater.idle()
 
 
