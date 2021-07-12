@@ -22,9 +22,9 @@ class Game:
     def apply_mask(self):
         out = []
 
-        [out.append(c) if m else out.append('_') for c, m in zip(self.word, self.mask)]
+        [out.append(c) if m else out.append("_") for c, m in zip(self.word, self.mask)]
 
-        return ' '.join(out)
+        return " ".join(out)
 
     def try_letter(self, letter: str) -> bool:
         positions = [m.start() for m in re.finditer(letter, self.word)]
@@ -39,7 +39,7 @@ class Game:
         return len(positions) > 0
 
     def errors_str(self) -> str:
-        return ', '.join(self.errors)
+        return ", ".join(self.errors)
 
     def no_letters_left(self) -> bool:
         return all(self.mask)
@@ -58,10 +58,10 @@ class Game:
     def from_json(cls, document: str):
         d = json.loads(document)
 
-        new_game = cls(d['word'], d['player_id'])
-        new_game.mask = d['mask']
-        new_game.stage = d['stage']
-        new_game.guessed_letters = d['guessed_letters']
-        new_game.errors = d['errors']
+        new_game = cls(d["word"], d["player_id"])
+        new_game.mask = d["mask"]
+        new_game.stage = d["stage"]
+        new_game.guessed_letters = d["guessed_letters"]
+        new_game.errors = d["errors"]
 
         return new_game
